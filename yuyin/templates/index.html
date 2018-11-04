@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    {% load staticfiles %}
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"/>
+    <title>发音人性别识别</title>
+    <script type="text/javascript" src="{% static "jquery.js" %}"></script>
+    <script type="text/javascript" src="{% static "MediaStreamRecorder.js" %}"></script>
+    <style type='text/css'>
+        .file {
+            position: relative;
+            display: inline-block;
+            background: #D0EEFF;
+            border: 1px solid #99D3F5;
+            border-radius: 4px;
+            padding: 4px 12px;
+            overflow: hidden;
+            color: #1E88C7;
+            text-decoration: none;
+            text-indent: 0;
+            line-height: 20px;
+        }
+        .file input {
+            position: absolute;
+            font-size: 100px;
+            right: 0;
+            top: 0;
+            opacity: 0;
+        }
+        .file:hover {
+            background: #AADFFD;
+            border-color: #78C3F3;
+            color: #004974;
+            text-decoration: none;
+        }
+    </style>
+<script type="text/javascript">
+window.onload = function(){
+$("#start").click(function(){
+$("#out").text("识别进行中...");
+var file_yuyin = document.getElementById('yuyin').files[0];
+var fd = new FormData();
+fd.append('yuyin_0', file_yuyin);
+$.ajax({
+url:"run",
+type:"POST",
+async:false,
+data:fd,
+processData:false,
+contentType: false,
+success:function(result){
+$("#out").html(result);
+}});
+});
+}
+</script>
+</head>
+<body bgcolor="#9B30FF">
+    <center>
+        <h3 style="color:#FAF0E6;">发音人性别识别(转换可能需要一定10s时间，请耐心等待)</h3>
+        <form action='run' method='post' enctype="multipart/form-data">
+            <input type='file' id="yuyin" name='yuyin_0' class='file'></br>
+            <input type='button' id="start" value='上传文件' style='-moz-border-radius:10px;-webkit-border-radius:10px;border-radius:10px;width:140px;height:36px;font-size:18px;padding-bottom:4px;color:black;background-color:#FF7F24;'>
+        </form>
+        <div id="out" style='padding:50px;color:#FAF0E6;font-size:30px;' align="center"></div>
+            <section class="experiment" style="padding: 5px;">
+            <label for="time-interval">时间间隔（毫秒）：</label>
+            <input type="text" id="time-interval" value="5000">ms
+
+            <br>
+            <br> recorderType:
+
+            
+            <br>
+
+            <input id="left-channel" type="checkbox" checked style="width:auto;">
+            <label for="left-channel">Record Mono Audio if WebAudio API is selected (above)</label>
+
+            <br>
+            <br>
+
+            <button id="start-recording">Start</button>
+            <button id="stop-recording" disabled>Stop</button>
+
+            <button id="pause-recording" disabled>Pause</button>
+            <button id="resume-recording" disabled>Resume</button>
+
+            <button id="save-recording" disabled>Upload</button>
+        </section>
+
+        <section class="experiment">
+            <div id="audios-container"></div>
+        </section>
+        
+    </center>
+<script type="text/javascript">
+    function captureUserMedia(mediaConstraints, successCallback, errorCallback) {
+        navigator.mediaDevices.getUserMedia(mediaConstraints).then(successCallback).catch(errorCallback);
+    };
+
+    var mediaConstraints = {
+        audio: true
+    };
+
+    document.querySelector('#start-recording').onclick = function() {
+        this.disabled = true;
+        captureUserMedia(mediaConstraints, onMediaSuccess, onMediaError);
+    };
+
+    document.querySelector('#stop-recording').onclick = function() {
+        this.disabled = true;
+        mediaRecorder.stop();
+        mediaRecorder.stream.stop();
+
+        document.querySelector('#pause-recording').disabled = true;
+        document.querySelector('#start-recording').disabled = false;
+    };
+
+    document.querySelector('#pause-recording').onclick = function() {
+        this.disabled = true;
+        mediaRecorder.pause();
+
+        document.querySelector('#resume-recording').disabled = false;
+    };
+
+    document.querySelector('#resume-recording').onclick = function() {
+        this.disabled = true;
+        mediaRecorder.resume();
+
+        document.querySelector('#pause-recording').disabled = false;
+    };
+    var mediaRecorder;
+    document.querySelector('#save-recording').onclick = function() {
+        this.disabled = true;
+        //mediaRecorder.save();
+
+        // alert('Drop WebM file on Chrome or Firefox. Both can play entire file. VLC player or other players may not work.');
+    };
+    function onMediaSuccess(stream) {
+        var audio = document.createElement('audio');
+
+        audio = mergeProps(audio, {
+            controls: true,
+            muted: true
+        });
+        audio.srcObject = stream;
+        audio.play();
+
+        audiosContainer.appendChild(audio);
+        audiosContainer.appendChild(document.createElement('hr'));
+
+        mediaRecorder = new MediaStreamRecorder(stream);
+        mediaRecorder.stream = stream;
+
+        mediaRecorder.recorderType = StereoAudioRecorder;
+        mediaRecorder.mimeType = 'audio/wav';
+
+        // don't force any mimeType; use above "recorderType" instead.
+        // mediaRecorder.mimeType = 'audio/webm'; // audio/ogg or audio/wav or audio/webm
+
+        mediaRecorder.audioChannels = !!document.getElementById('left-channel').checked ? 1 : 2;
+        mediaRecorder.ondataavailable = function(blob) {
+            // upload each blob to python server
+            var file = new File([blob], 'msr-' + (new Date).toISOString().replace(/:|\./g, '-') + '.wav', {type: 'audio/wav'});
+            var formData = new FormData();
+            var code="";
+            formData.append('yuyin_0', file);
+            $.ajax({
+            url:"run",
+            type:"POST",
+            async:true,
+            data:formData,
+            processData:false,
+            contentType: false,
+            success:function(result){
+            code=result;
+            var a = document.createElement('a');
+            a.target = '_blank';
+            a.innerHTML = 'Open Recorded Audio No. ' + (index++) + ' (Size: ' + bytesToSize(blob.size) + ') Time Length: ' + getTimeLength(timeInterval)+"  "+code;
+
+            a.href = URL.createObjectURL(blob);
+
+            audiosContainer.appendChild(a);
+            audiosContainer.appendChild(document.createElement('hr'));
+            }});
+        };
+
+        var timeInterval = document.querySelector('#time-interval').value;
+        if (timeInterval) timeInterval = parseInt(timeInterval);
+        else timeInterval = 5 * 1000;
+
+        // get blob after specific time interval
+        mediaRecorder.start(timeInterval);
+
+        document.querySelector('#stop-recording').disabled = false;
+        document.querySelector('#pause-recording').disabled = false;
+        document.querySelector('#save-recording').disabled = false;
+    }
+
+    function onMediaError(e) {
+        console.error('media error', e);
+    }
+
+    var audiosContainer = document.getElementById('audios-container');
+    var index = 1;
+
+    // below function via: http://goo.gl/B3ae8c
+    function bytesToSize(bytes) {
+        var k = 1000;
+        var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        if (bytes === 0) return '0 Bytes';
+        var i = parseInt(Math.floor(Math.log(bytes) / Math.log(k)), 10);
+        return (bytes / Math.pow(k, i)).toPrecision(3) + ' ' + sizes[i];
+    }
+
+    // below function via: http://goo.gl/6QNDcI
+    function getTimeLength(milliseconds) {
+        var data = new Date(milliseconds);
+        return data.getUTCHours() + " hours, " + data.getUTCMinutes() + " minutes and " + data.getUTCSeconds() + " second(s)";
+    }
+
+    window.onbeforeunload = function() {
+        document.querySelector('#start-recording').disabled = false;
+    };
+</script>
+</body>
+</html>
